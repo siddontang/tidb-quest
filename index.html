@@ -1,0 +1,671 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TiDB Quest — Cloud DBA RPG</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
+*{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --bg:#0d1117;--panel:#161b22;--border:#30363d;
+  --cyan:#58a6ff;--green:#3fb950;--red:#f85149;
+  --gold:#d29922;--purple:#bc8cff;--orange:#f0883e;
+  --text:#c9d1d9;--dim:#8b949e;--bright:#f0f6fc;
+}
+body{
+  background:var(--bg);color:var(--text);
+  font-family:'Press Start 2P',monospace;
+  min-height:100vh;display:flex;flex-direction:column;align-items:center;
+  padding:0;
+}
+#app{width:100%;max-width:900px;min-height:100vh;display:flex;flex-direction:column}
+
+/* Top Bar */
+#topbar{
+  background:var(--panel);border-bottom:2px solid var(--border);
+  padding:12px 20px;display:flex;justify-content:space-between;align-items:center;
+  position:sticky;top:0;z-index:10;
+}
+#topbar .title{font-size:14px;color:var(--cyan)}
+#topbar .info{font-size:8px;color:var(--dim)}
+#topbar .hp{font-size:14px}
+
+/* Main */
+#main{flex:1;display:flex;flex-direction:column;padding:16px 20px;gap:16px;overflow-y:auto}
+
+/* Dashboard - RU & Storage meters */
+#dashboard{
+  background:var(--panel);border:2px solid var(--border);
+  padding:16px 20px;display:flex;gap:20px;flex-wrap:wrap;
+  align-items:center;justify-content:center;
+}
+.meter{flex:1;min-width:200px;text-align:center}
+.meter .meter-label{font-size:8px;color:var(--dim);margin-bottom:6px}
+.meter .meter-value{font-size:20px;margin-bottom:6px}
+.meter .meter-bar{height:10px;background:#0a0e14;border:1px solid var(--border);overflow:hidden}
+.meter .meter-fill{height:100%;transition:width .6s}
+.meter .meter-sub{font-size:7px;color:var(--dim);margin-top:4px}
+.ru-value{color:var(--cyan)}
+.stor-value{color:var(--green)}
+.cost-value{color:var(--gold)}
+.fill-cyan{background:var(--cyan)}
+.fill-green{background:var(--green)}
+.fill-gold{background:var(--gold)}
+.fill-red{background:var(--red)}
+
+/* Unlocks row */
+#unlocks{
+  display:flex;gap:8px;flex-wrap:wrap;justify-content:center;
+  padding:4px 0;
+}
+.unlock-badge{
+  font-size:7px;padding:4px 8px;
+  border:1px solid var(--border);color:var(--dim);
+  opacity:0.3;transition:all .3s;
+}
+.unlock-badge.active{opacity:1;border-color:var(--cyan);color:var(--cyan)}
+.unlock-badge.tiflash.active{border-color:var(--purple);color:var(--purple)}
+.unlock-badge.tidbx.active{border-color:var(--orange);color:var(--orange)}
+.unlock-badge.vector.active{border-color:var(--gold);color:var(--gold)}
+.unlock-badge.zero.active{border-color:var(--green);color:var(--green)}
+
+/* Scene */
+#scene{background:var(--panel);border:2px solid var(--border);padding:20px 24px;min-height:160px}
+#scene .scene-title{font-size:13px;color:var(--gold);margin-bottom:12px}
+#scene .scene-text{font-size:10px;line-height:2.2;color:var(--text)}
+#scene .scene-text b{color:var(--bright)}
+.hl{color:var(--cyan)}.wn{color:var(--gold)}.er{color:var(--red)}.ok{color:var(--green)}
+
+/* SQL Editor */
+#sql-area{display:none}
+#sql-area .sql-label{font-size:9px;color:var(--cyan);margin-bottom:8px}
+#sql-editor{
+  width:100%;min-height:70px;padding:12px;
+  background:#0a0e14;border:2px solid var(--border);
+  color:var(--green);font-family:'Press Start 2P',monospace;
+  font-size:10px;line-height:1.8;resize:vertical;outline:none;
+}
+#sql-editor:focus{border-color:var(--cyan)}
+#sql-hint{font-size:8px;color:var(--dim);margin-top:6px;line-height:1.8}
+#sql-result{display:none;margin-top:8px;padding:10px;background:#0a0e14;border:2px solid var(--border);font-size:9px;line-height:1.8;white-space:pre-line}
+
+/* Choices */
+#choices{display:flex;flex-direction:column;gap:8px}
+.choice{
+  background:var(--panel);border:2px solid var(--border);
+  padding:12px 16px;cursor:pointer;transition:all .15s;
+  display:flex;align-items:center;gap:12px;
+}
+.choice:hover{border-color:var(--cyan);background:rgba(88,166,255,0.06)}
+.choice .ch-icon{font-size:18px;flex-shrink:0}
+.choice .ch-text{font-size:9px;line-height:1.8;color:var(--text)}
+.choice .ch-text small{color:var(--dim);font-size:8px}
+.choice.disabled{opacity:0.4;cursor:not-allowed;pointer-events:none}
+
+/* Buttons */
+.btn{
+  font-family:'Press Start 2P',monospace;font-size:11px;padding:12px 28px;
+  border:2px solid var(--cyan);background:transparent;color:var(--cyan);
+  cursor:pointer;margin:4px;transition:all .15s;
+}
+.btn:hover{background:var(--cyan);color:var(--bg)}
+.btn.gold{border-color:var(--gold);color:var(--gold)}.btn.gold:hover{background:var(--gold);color:var(--bg)}
+.btn.green{border-color:var(--green);color:var(--green)}.btn.green:hover{background:var(--green);color:var(--bg)}
+
+/* Result overlay */
+#result{
+  display:none;position:fixed;top:0;left:0;right:0;bottom:0;
+  background:rgba(5,5,15,0.92);z-index:100;
+  flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:24px;
+}
+#result.show{display:flex}
+#result .r-title{font-size:16px;margin-bottom:8px}
+#result .r-text{font-size:10px;line-height:2.2;color:var(--dim);margin-bottom:20px;max-width:520px}
+#result .r-text b{color:var(--text)}
+#result .r-xp{font-size:12px;color:var(--gold);margin-bottom:16px}
+
+/* Start/End */
+#start-screen{display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;min-height:100vh;padding:24px}
+#start-screen.h{display:none}
+#game-screen{display:none}#game-screen.show{display:flex;flex-direction:column}
+#end-screen{display:none;padding:24px}#end-screen.show{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;text-align:center}
+.logo{font-size:clamp(24px,5vw,42px);color:var(--cyan);text-shadow:0 0 20px rgba(88,166,255,0.4);margin-bottom:8px}
+.sub{font-size:clamp(10px,2vw,14px);color:var(--gold);margin-bottom:24px}
+.desc{font-size:clamp(9px,1.5vw,11px);color:var(--dim);line-height:2.4;margin-bottom:28px;max-width:540px;padding:0 20px}
+.desc b{color:var(--text)}
+#badge{position:fixed;top:10px;right:14px;font-size:8px;color:var(--green);z-index:50}
+
+@media(max-width:600px){
+  #dashboard{flex-direction:column;gap:12px}
+  .meter{min-width:auto}
+}
+</style>
+</head>
+<body>
+<div id="app">
+<div id="badge">● ZERO</div>
+
+<!-- START -->
+<div id="start-screen">
+  <div class="logo">TiDB QUEST</div>
+  <div class="sub">CLOUD DBA RPG</div>
+  <div class="desc">
+    You just got hired at a fast-growing startup.<br>
+    Your job: manage <b>TiDB Cloud Starter</b>.<br><br>
+    No nodes to manage — just <b>RU</b> (Request Units) and <b>Storage</b>.<br>
+    Write SQL, optimize queries, and unlock features to keep the app running!<br><br>
+    🧠 No reflexes needed — just smart database decisions.
+  </div>
+  <div>
+    <button class="btn" onclick="startGame()">▶ START</button>
+  </div>
+  <div style="margin-top:16px;font-size:8px;color:var(--dim)">Progress saved to TiDB Cloud Zero</div>
+</div>
+
+<!-- GAME -->
+<div id="game-screen">
+  <div id="topbar">
+    <div>
+      <div class="title">⚡ TiDB Quest</div>
+      <div class="info">Level <span id="hud-level">1</span> · <span id="hud-title"></span></div>
+    </div>
+    <div style="text-align:right">
+      <div class="hp" id="hud-hp">❤️❤️❤️</div>
+      <div class="info">XP: <span id="hud-xp">0</span></div>
+    </div>
+  </div>
+
+  <div id="main">
+    <!-- Dashboard -->
+    <div id="dashboard">
+      <div class="meter">
+        <div class="meter-label">⚡ REQUEST UNITS (RU/s)</div>
+        <div class="meter-value ru-value" id="m-ru">100</div>
+        <div class="meter-bar"><div class="meter-fill fill-cyan" id="m-ru-bar" style="width:10%"></div></div>
+        <div class="meter-sub">Free tier: 500 RU/s</div>
+      </div>
+      <div class="meter">
+        <div class="meter-label">💾 STORAGE</div>
+        <div class="meter-value stor-value" id="m-stor">1 GB</div>
+        <div class="meter-bar"><div class="meter-fill fill-green" id="m-stor-bar" style="width:4%"></div></div>
+        <div class="meter-sub">Free tier: 25 GB</div>
+      </div>
+      <div class="meter">
+        <div class="meter-label">💰 MONTHLY COST</div>
+        <div class="meter-value cost-value" id="m-cost">$0</div>
+        <div class="meter-bar"><div class="meter-fill fill-gold" id="m-cost-bar" style="width:0%"></div></div>
+        <div class="meter-sub">Free tier covers basics</div>
+      </div>
+    </div>
+
+    <!-- Unlocks -->
+    <div id="unlocks">
+      <div class="unlock-badge active" id="u-sql">✅ SQL</div>
+      <div class="unlock-badge" id="u-index">🔍 Indexes</div>
+      <div class="unlock-badge tiflash" id="u-tiflash">⚡ TiFlash</div>
+      <div class="unlock-badge vector" id="u-vector">🧠 Vector</div>
+      <div class="unlock-badge tidbx" id="u-tidbx">☁️ TiDB X</div>
+      <div class="unlock-badge zero" id="u-zero">🚀 Zero</div>
+    </div>
+
+    <!-- Scene -->
+    <div id="scene">
+      <div class="scene-title" id="scene-title"></div>
+      <div class="scene-text" id="scene-text"></div>
+    </div>
+
+    <!-- SQL Editor -->
+    <div id="sql-area">
+      <div class="sql-label">💻 SQL TERMINAL</div>
+      <textarea id="sql-editor" spellcheck="false" placeholder="Type your SQL here..."></textarea>
+      <div id="sql-hint"></div>
+      <div id="sql-result"></div>
+      <button class="btn green" style="margin-top:8px" onclick="runSQL()">▶ RUN (Ctrl+Enter)</button>
+    </div>
+
+    <!-- Choices -->
+    <div id="choices"></div>
+  </div>
+</div>
+
+<!-- Result overlay -->
+<div id="result">
+  <div style="font-size:36px;margin-bottom:12px" id="r-icon"></div>
+  <div class="r-title" id="r-title" style="color:var(--green)"></div>
+  <div class="r-text" id="r-text"></div>
+  <div class="r-xp" id="r-xp"></div>
+  <button class="btn gold" onclick="nextLevel()">NEXT LEVEL →</button>
+</div>
+
+<!-- END -->
+<div id="end-screen">
+  <div style="font-size:36px;margin-bottom:12px">🏆</div>
+  <div style="font-size:18px;color:var(--gold);margin-bottom:8px">CONGRATULATIONS!</div>
+  <div style="font-size:12px;color:var(--cyan);margin-bottom:16px" id="end-title"></div>
+  <div style="font-size:10px;color:var(--dim);line-height:2.4;margin-bottom:20px;max-width:500px" id="end-text"></div>
+  <div><button class="btn" onclick="location.reload()">↻ PLAY AGAIN</button></div>
+</div>
+</div>
+
+<script>
+// ═══════════════════════════════════
+// TiDB Quest v4 — Starter RPG
+// ═══════════════════════════════════
+
+// DB Layer
+const DB={
+  i:null,
+  async init(){
+    const c=localStorage.getItem('tqz4');
+    if(c){const p=JSON.parse(c);if(Date.now()-p.t<29*864e5){this.i=p;this.badge(1);return}}
+    try{this.badge(0);
+      const r=await fetch('https://zero.tidbapi.com/v1beta1/instances',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({tag:'tidb-quest-v4'})});
+      const d=await r.json();
+      if(d.instance){this.i={...d.instance,t:Date.now()};localStorage.setItem('tqz4',JSON.stringify(this.i));this.badge(1)}
+    }catch(e){this.badge(-1)}
+  },
+  badge(s){const b=document.getElementById('badge');b.textContent=s===0?'● PROVISIONING...':s===1?'● ZERO CONNECTED':'● LOCAL';b.style.color=s===0?'var(--gold)':s===1?'var(--green)':'var(--dim)'},
+};
+DB.init();
+
+// Game State
+let G={
+  level:0, xp:0, hp:3, maxHp:3,
+  ru:100, ruMax:500, // RU/s
+  storage:1, storageMax:25, // GB
+  cost:0, // $/month
+  unlocks:{sql:true, index:false, tiflash:false, vector:false, tidbx:false, zero:false},
+  name:'DBA_'+Math.floor(Math.random()*9999),
+};
+
+// ── Levels ──
+const LEVELS=[
+  // 1: First Query
+  {
+    title:'Day 1 — Your First Query',
+    scene:`Welcome to <b>DataRocket Inc</b>! You're the new DBA.<br><br>
+Your app runs on <b>TiDB Cloud Starter</b>.<br>
+No servers to manage — you just see <span class="hl">RU (Request Units)</span> and <span class="hl">Storage</span>.<br><br>
+The CEO wants to see the user table. Run your first query!<br>
+<small class="wn">Each query costs RU. Simple reads are cheap!</small>`,
+    type:'sql',
+    sqlHint:'Type this: SELECT * FROM users LIMIT 10;',
+    sqlCheck:(s)=>{
+      const q=s.toLowerCase().trim();
+      if(q.includes('select')&&(q.includes('users')||q.includes('*')))
+        return{ok:true,msg:'✅ Query OK! Cost: 5 RU\n\nTiDB Cloud Starter charges per query in Request Units.\nSimple point reads ≈ 1 RU. Scans cost more.\nYou don\'t manage servers — just write SQL!'};
+      if(q.includes('select'))return{ok:true,msg:'✅ Query OK! TiDB handles standard MySQL syntax.\nEach query costs some RU based on complexity.'};
+      return{ok:false,msg:'Try a SELECT query: SELECT * FROM users LIMIT 10;'};
+    },
+    effect:()=>{G.ru=105},
+    xp:20,
+    learned:'🧠 TiDB Cloud Starter = pay per RU. No nodes to manage!',
+  },
+  // 2: RU Spike
+  {
+    title:'Week 2 — The RU Spike',
+    scene:`Your app is growing! Users doubled to <b>10,000</b>.<br><br>
+RU usage spiked to <span class="wn">400 RU/s</span> — close to the free tier limit of 500.<br>
+A developer wrote a query scanning the full orders table every second.<br><br>
+What do you do?`,
+    type:'choice',
+    choices:[
+      {icon:'🔍',text:'Add an index to the query<br><small>Reduce RU by avoiding full scans</small>',
+        effect:()=>{G.ru=150;G.unlocks.index=true},
+        result:{ok:true,msg:'Index created! RU dropped: 400 → 150 RU/s ✅\n\nA full table scan costs 100x more RU than an indexed read.\nIndexes are the #1 way to optimize RU consumption.\n\nIn serverless, fewer RU = lower cost!'}},
+      {icon:'💰',text:'Just pay for more RU<br><small>Upgrade from free tier</small>',
+        effect:()=>{G.ruMax=10000;G.cost=20;G.ru=400},
+        result:{ok:false,msg:'Spending money works, but the wasteful query is still burning RU.\nAlways optimize first, then scale. Index the query!'}},
+      {icon:'🙈',text:'Ignore it — free tier is fine<br><small>It\'ll probably be okay</small>',
+        effect:()=>{G.ru=500;G.hp--},
+        result:{ok:false,msg:'Hit the free tier limit! Queries are being throttled. 😰\nUsers are seeing timeouts. Add an index!'}},
+    ],
+    xp:30,
+    learned:'🧠 Indexes reduce RU cost dramatically. Optimize before scaling!',
+  },
+  // 3: Slow Query Tuning
+  {
+    title:'Month 1 — The Slow Query',
+    scene:`Alert! A query is burning <span class="er">200 RU per execution</span>:<br><br>
+<code>SELECT * FROM orders WHERE user_id = 12345;</code><br><br>
+The orders table has <b>5 million rows</b> and no index on user_id.<br>
+That's a full table scan every time! Fix it.`,
+    type:'sql',
+    sqlHint:'Type this: CREATE INDEX idx_user ON orders(user_id);',
+    sqlCheck:(s)=>{
+      const q=s.toLowerCase().trim();
+      if(q.includes('create')&&q.includes('index')&&q.includes('user_id'))
+        return{ok:true,msg:'✅ Index created! RU per query: 200 → 2 RU (100x cheaper!)\n\nOnline DDL — the index builds without blocking writes.\nStorage increased slightly (indexes use space), but RU savings are huge.'};
+      if(q.includes('create')&&q.includes('index'))
+        return{ok:true,msg:'✅ Index created! Remember to index the columns in WHERE clauses.'};
+      return{ok:false,msg:'Try: CREATE INDEX idx_user ON orders(user_id);'};
+    },
+    effect:()=>{G.ru=120;G.storage=3},
+    xp:40,
+    learned:'🧠 Index = trade a little storage for massive RU savings!',
+  },
+  // 4: Analytics
+  {
+    title:'Month 2 — CEO Wants Analytics',
+    scene:`The CEO needs a <b>real-time revenue dashboard</b>.<br><br>
+<code>SELECT region, SUM(revenue) FROM orders GROUP BY region</code><br><br>
+This aggregation scans millions of rows = <span class="er">5,000 RU per run</span>.<br>
+Running it every minute would eat your entire budget!`,
+    type:'choice',
+    choices:[
+      {icon:'⚡',text:'Enable TiFlash — columnar replica<br><small>Analytics on columns, not rows. Way fewer RU.</small>',
+        effect:()=>{G.unlocks.tiflash=true;G.ru=200;G.cost+=10;G.storage+=2},
+        result:{ok:true,msg:'TiFlash enabled! Analytics RU: 5,000 → 200 per query ✅\n\nTiFlash stores data in columnar format (like Redshift/BigQuery).\nBut it lives INSIDE TiDB — no ETL, no sync, no separate database.\n\nOLTP uses row storage. OLAP uses TiFlash. Same SQL. This is HTAP!'}},
+      {icon:'📤',text:'Export to BigQuery for analytics<br><small>ETL pipeline, separate system</small>',
+        effect:()=>{G.cost+=80;G.ru=300},
+        result:{ok:false,msg:'Works, but now you manage an ETL pipeline + BigQuery costs.\nData is stale by the time it arrives. TiFlash gives real-time HTAP!'}},
+      {icon:'🐌',text:'Just run it on row storage<br><small>It\'ll be expensive but fine</small>',
+        effect:()=>{G.ru=450;G.cost+=50;G.hp--},
+        result:{ok:false,msg:'5,000 RU every minute = 7.2M RU/day. Budget blown! 💸\nTiFlash cuts analytics RU by 25x with columnar storage.'}},
+    ],
+    xp:50,
+    learned:'🧠 TiFlash = columnar analytics inside TiDB. HTAP with no ETL!',
+  },
+  // 5: Full Text Search
+  {
+    title:'Month 3 — Search Feature',
+    scene:`Product wants a <b>search bar</b> for the marketplace.<br><br>
+<code>SELECT * FROM products WHERE name LIKE '%phone%'</code><br><br>
+LIKE with leading wildcard = <span class="er">full table scan</span> = <span class="er">500 RU</span> per search.<br>
+With 1,000 searches/minute, that's 500K RU/min! 😱`,
+    type:'sql',
+    sqlHint:'Type this: ALTER TABLE products ADD FULLTEXT INDEX idx_name(name);',
+    sqlCheck:(s)=>{
+      const q=s.toLowerCase().trim();
+      if(q.includes('fulltext'))
+        return{ok:true,msg:'✅ Full-text index created! RU per search: 500 → 5 (100x savings!)\n\nFULLTEXT indexes handle text search natively in TiDB.\nNo Elasticsearch needed. One less system to manage.\n\nQuery with: SELECT * FROM products WHERE MATCH(name) AGAINST(\'phone\')'};
+      return{ok:false,msg:'Try: ALTER TABLE products ADD FULLTEXT INDEX idx_name(name);\n\nTiDB supports full-text search natively!'};
+    },
+    effect:()=>{G.ru=180;G.storage=5},
+    xp:50,
+    learned:'🧠 FULLTEXT index = text search in SQL. No Elasticsearch needed!',
+  },
+  // 6: Data Growth + TiDB X
+  {
+    title:'Month 6 — Storage Explosion',
+    scene:`Your data hit <b>500 GB</b>! Way past the free tier.<br>
+Storage cost: <span class="er">$115/month</span> and growing fast.<br><br>
+The CTO asks: "Can we cut storage costs without deleting data?"<br><br>
+This is where <b>TiDB X</b> changes everything.`,
+    type:'choice',
+    choices:[
+      {icon:'☁️',text:'Enable TiDB X — S3 object storage backbone<br><small>Hot data cached locally, cold data on S3. 70% cheaper.</small>',
+        effect:()=>{G.unlocks.tidbx=true;G.storage=500;G.storageMax=10000;G.cost=35},
+        result:{ok:true,msg:'TiDB X activated! Storage cost: $115 → $35/month ✅\n\nTiDB X uses S3 as the storage backbone:\n• Hot data → local cache (fast)\n• Cold data → S3 ($0.023/GB vs $0.08/GB)\n• Compute scales independently from storage\n\nS3 is the new disk. Infinite capacity, fraction of the cost.'}},
+      {icon:'🗑️',text:'Delete old data<br><small>Purge records older than 6 months</small>',
+        effect:()=>{G.storage=50;G.cost=12},
+        result:{ok:false,msg:'Cost reduced, but users lost historical data.\nRegulatory team is angry — they needed 2 years of records!\nTiDB X keeps everything accessible at S3 prices.'}},
+      {icon:'📦',text:'Compress the data<br><small>Apply compression, hope for the best</small>',
+        effect:()=>{G.storage=300;G.cost=70},
+        result:{ok:false,msg:'Saved 40%, but still expensive. And it slows down queries.\nTiDB X gives 70% savings with NO performance hit on hot data.'}},
+    ],
+    xp:60,
+    learned:'🧠 TiDB X = S3 backbone. Infinite storage at object storage prices!',
+  },
+  // 7: Vector Search
+  {
+    title:'Month 9 — AI Features',
+    scene:`The team wants to add <b>AI-powered search</b>.<br>
+Users search by meaning, not just keywords: "cozy winter jacket"<br><br>
+You need to store <b>vector embeddings</b> alongside product data.<br>
+A vector embedding is a list of numbers that captures the "meaning" of text.<br>
+AI models like OpenAI output <b>3 dimensions</b> (tiny), <b>768</b> (medium), or <b>1536</b> (large).<br><br>
+Let's use 3 dimensions to keep it simple!`,
+    type:'sql',
+    sqlHint:'Type this: ALTER TABLE products ADD COLUMN embedding VECTOR(3);',
+    sqlCheck:(s)=>{
+      const q=s.toLowerCase().trim();
+      if(q.includes('vector'))
+        return{ok:true,msg:'✅ Vector column added! Cost: ~3 RU per similarity search.\n\nNow you can search by meaning:\n\nSELECT name, price FROM products\nORDER BY VEC_COSINE_DISTANCE(\n  embedding, \"[0.1, 0.5, 0.9]\"\n) LIMIT 10;\n\nThe vector [0.1, 0.5, 0.9] represents \"cozy winter jacket\".\nTiDB finds products with similar meaning!\n\nSQL + Vector + Full-text in ONE database.\nNo Pinecone. No sync jobs.'};
+      return{ok:false,msg:'Type: ALTER TABLE products ADD COLUMN embedding VECTOR(3);\n\nVECTOR(3) means 3 dimensions — a list of 3 numbers like [0.1, 0.5, 0.9].'};
+    },
+    effect:()=>{G.unlocks.vector=true;G.ru=220;G.storage+=10},
+    xp:60,
+    learned:'🧠 TiDB = SQL + Vector + Full-text search. One database for everything!',
+  },
+  // 8: Instant Provisioning
+  {
+    title:'Year 1 — Hackathon Emergency',
+    scene:`A team needs a database for a hackathon project. <b>Right now.</b><br><br>
+Traditional way: file a ticket → security review → provisioning → 2 days.<br>
+The hackathon ends in 6 hours. ⏰<br><br>
+What if you could get a database in <b>200 milliseconds</b>?`,
+    type:'choice',
+    choices:[
+      {icon:'🚀',text:'TiDB Cloud Zero — one API call<br><small>curl -X POST .../instances → Database ready in 200ms</small>',
+        effect:()=>{G.unlocks.zero=true},
+        result:{ok:true,msg:'curl -X POST https://zero.tidbapi.com/v1beta1/instances\n\n→ 200ms later: MySQL-compatible database ready! ✅\n\nTiDB Cloud Zero:\n• No signup needed\n• Full MySQL + Vector + Full-text\n• 30-day lifespan (claim to keep)\n• Perfect for agents, demos, hackathons\n\nThis is how AI agents will get databases.'}},
+      {icon:'📋',text:'File a provisioning ticket<br><small>Follow the process. It exists for a reason.</small>',
+        effect:()=>{G.hp--},
+        result:{ok:false,msg:'The hackathon ended before the ticket was reviewed. 😞\nTiDB Cloud Zero: instant databases when speed matters.'}},
+      {icon:'💻',text:'Use SQLite on a laptop<br><small>Quick and dirty</small>',
+        effect:()=>{},
+        result:{ok:false,msg:'Works for a demo, but:\n• No vector search\n• Can\'t share across team\n• No replication\nTiDB Cloud Zero is just as easy AND cloud-ready.'}},
+    ],
+    xp:50,
+    learned:'🧠 TiDB Cloud Zero = database in 200ms. No signup. One API call!',
+  },
+  // 9: Node failure (auto-handled)
+  {
+    title:'Year 1 — The 3 AM Alert',
+    scene:`⚠️ <span class="er">ALERT: Infrastructure incident in us-east-1!</span><br><br>
+Your pager goes off at 3 AM. Storage nodes affected.<br><br>
+But wait — you're on <b>TiDB Cloud Starter</b>.<br>
+You don't manage nodes. TiDB uses <b>Raft consensus</b> with 3 replicas.<br><br>
+What should you do?`,
+    type:'choice',
+    choices:[
+      {icon:'😴',text:'Go back to sleep — TiDB handles it<br><small>Raft auto-failover. 3 replicas. Zero data loss.</small>',
+        effect:()=>{},
+        result:{ok:true,msg:'Raft elected a new leader in 10 seconds. Zero data loss. ✅\n\nYou slept through it. Your app never noticed.\n\nTiDB keeps 3 replicas via Raft consensus.\nStarter means YOU don\'t handle infrastructure failures.\nThat\'s the whole point.'}},
+      {icon:'😱',text:'Panic! Call the team!<br><small>Wake everyone up, war room, incident response</small>',
+        effect:()=>{G.hp--},
+        result:{ok:false,msg:'You woke 5 people up for nothing.\nBy the time the war room started, Raft had already recovered.\nStarter = the cloud provider handles infra. Trust it.'}},
+      {icon:'💾',text:'Quickly take a backup<br><small>Better safe than sorry</small>',
+        effect:()=>{G.ru+=100},
+        result:{ok:false,msg:'Backups are already automatic in TiDB Cloud! Daily + PITR.\nYour manual backup just burned 100 extra RU.\nWith serverless, infrastructure is not your problem.'}},
+    ],
+    xp:50,
+    learned:'🧠 Starter + Raft = you don\'t manage failures. Sleep well!',
+  },
+  // 10: Finale
+  {
+    title:'Year 2 — Database Legend',
+    scene:`You've scaled from <b>0 to millions of users</b>.<br><br>
+Your TiDB Cloud Starter setup now includes:<br>
+• <span class="hl">SQL queries</span> — standard MySQL, pay per RU<br>
+• <span class="hl">Indexes</span> — trade storage for cheaper RU<br>
+• <span class="hl">TiFlash</span> — columnar analytics (HTAP)<br>
+• <span class="hl">Full-text search</span> — no Elasticsearch needed<br>
+• <span class="hl">Vector search</span> — AI-native, no Pinecone needed<br>
+• <span class="hl">TiDB X</span> — S3 backbone, infinite cheap storage<br>
+• <span class="hl">TiDB Cloud Zero</span> — instant databases<br><br>
+One last task: write any SQL to celebrate! 🎉`,
+    type:'sql',
+    sqlHint:'Write any SQL to celebrate! Even SELECT "I am a Database Legend" works!',
+    sqlCheck:(s)=>{
+      if(s.trim().length>5)
+        return{ok:true,msg:'🏆 Your TiDB Cloud cluster processes it beautifully:\n\n→ RU metered automatically\n→ Storage on S3 via TiDB X\n→ Analytics via TiFlash\n→ Vector search for AI\n→ Full-text for humans\n→ Zero provisioning for new services\n\nAll in ONE database. No glue. No sync. No ops.\nYou\'ve mastered TiDB Cloud! 🎉'};
+      return{ok:false,msg:'Type any SQL — even SELECT 1 works! Celebrate your journey!'};
+    },
+    effect:()=>{},
+    xp:100,
+    learned:'🏆 TiDB Cloud Starter: SQL + Vector + Analytics. Pay per RU. Scale to zero.',
+  },
+];
+
+// ── Render ──
+function renderDashboard(){
+  document.getElementById('m-ru').textContent=G.ru+' RU/s';
+  const ruPct=Math.min(100,(G.ru/G.ruMax)*100);
+  const ruBar=document.getElementById('m-ru-bar');
+  ruBar.style.width=ruPct+'%';
+  ruBar.className='meter-fill '+(ruPct>80?'fill-red':ruPct>50?'fill-gold':'fill-cyan');
+
+  const storStr=G.storage>=1000?(G.storage/1000).toFixed(1)+' TB':G.storage+' GB';
+  document.getElementById('m-stor').textContent=storStr;
+  const storPct=Math.min(100,(G.storage/G.storageMax)*100);
+  document.getElementById('m-stor-bar').style.width=storPct+'%';
+
+  document.getElementById('m-cost').textContent=G.cost===0?'$0 (free!)':'$'+G.cost+'/mo';
+  document.getElementById('m-cost-bar').style.width=Math.min(100,G.cost/5)+'%';
+
+  // Unlocks
+  ['sql','index','tiflash','vector','tidbx','zero'].forEach(k=>{
+    const el=document.getElementById('u-'+k);
+    if(G.unlocks[k])el.classList.add('active');
+    else el.classList.remove('active');
+  });
+}
+
+function renderHUD(){
+  document.getElementById('hud-level').textContent=G.level+1;
+  document.getElementById('hud-xp').textContent=G.xp;
+  let hp='';for(let i=0;i<G.maxHp;i++)hp+=i<G.hp?'❤️':'🖤';
+  document.getElementById('hud-hp').textContent=hp;
+}
+
+function renderLevel(idx){
+  const lv=LEVELS[idx];
+  if(!lv)return;
+  document.getElementById('hud-title').textContent=lv.title;
+  document.getElementById('scene-title').textContent=lv.title;
+  document.getElementById('scene-text').innerHTML=lv.scene;
+
+  document.getElementById('sql-area').style.display='none';
+  document.getElementById('choices').innerHTML='';
+  document.getElementById('sql-result').style.display='none';
+  document.getElementById('sql-editor').value='';
+
+  if(lv.type==='sql'){
+    document.getElementById('sql-area').style.display='block';
+    document.getElementById('sql-hint').textContent=lv.sqlHint||'';
+    setTimeout(()=>document.getElementById('sql-editor').focus(),100);
+  } else {
+    lv.choices.forEach((ch,i)=>{
+      const d=document.createElement('div');
+      d.className='choice';
+      d.innerHTML=`<span class="ch-icon">${ch.icon}</span><span class="ch-text">${ch.text}</span>`;
+      d.onclick=()=>pickChoice(idx,i);
+      document.getElementById('choices').appendChild(d);
+    });
+  }
+  renderDashboard();
+  renderHUD();
+}
+
+function runSQL(){
+  const lv=LEVELS[G.level];
+  if(!lv||lv.type!=='sql')return;
+  const sql=document.getElementById('sql-editor').value;
+  const check=lv.sqlCheck(sql);
+  const el=document.getElementById('sql-result');
+  el.style.display='block';
+  el.className=check.ok?'ok':'er';
+  el.id='sql-result';
+  el.style.color=check.ok?'var(--green)':'var(--red)';
+  el.style.borderColor=check.ok?'var(--green)':'var(--red)';
+  el.textContent=check.msg;
+  if(check.ok){
+    if(lv.effect)lv.effect();
+    renderDashboard();
+    showInlineResult(true);
+  }
+}
+
+function pickChoice(lvIdx,chIdx){
+  const lv=LEVELS[lvIdx];
+  const ch=lv.choices[chIdx];
+  document.querySelectorAll('.choice').forEach(c=>c.classList.add('disabled'));
+  ch.effect();
+  renderDashboard();
+  renderHUD();
+
+  const fb=document.createElement('div');
+  fb.style.cssText='margin-top:12px;padding:10px;border:2px solid '+(ch.result.ok?'var(--green)':'var(--red)')+';font-size:9px;line-height:2;color:'+(ch.result.ok?'var(--green)':'var(--red)')+';white-space:pre-line';
+  fb.textContent=ch.result.msg;
+  document.getElementById('scene-text').appendChild(fb);
+
+  showInlineResult(ch.result.ok);
+}
+
+function showInlineResult(ok){
+  const lv=LEVELS[G.level];
+  const xpGain=ok?lv.xp:Math.floor(lv.xp/3);
+  G.xp+=xpGain;
+  renderHUD();
+
+  // Remove old inline result if any
+  const old=document.getElementById('inline-result');
+  if(old)old.remove();
+
+  // Create inline result block
+  const div=document.createElement('div');
+  div.id='inline-result';
+  div.style.cssText='background:var(--panel);border:2px solid '+(ok?'var(--green)':'var(--gold)')+';padding:20px 24px;text-align:center;';
+  div.innerHTML=`
+    <div style="font-size:28px;margin-bottom:8px">${ok?'✅':'⚠️'}</div>
+    <div style="font-size:14px;color:${ok?'var(--green)':'var(--gold)'};margin-bottom:10px">${ok?'CHALLENGE PASSED!':'LESSON LEARNED'}</div>
+    <div style="font-size:10px;line-height:2.2;color:var(--dim);margin-bottom:12px">${ok?'<b>'+lv.learned+'</b>':'Not the best choice, but you learned something!<br><br><b>'+lv.learned+'</b>'}</div>
+    <div style="font-size:12px;color:var(--gold);margin-bottom:16px">+${xpGain} XP</div>
+    <button class="btn gold" onclick="nextLevel()">NEXT LEVEL →</button>
+  `;
+  document.getElementById('main').appendChild(div);
+  div.scrollIntoView({behavior:'smooth'});
+}
+
+// Keep old function as fallback
+function showResult(ok){ showInlineResult(ok); }
+
+function nextLevel(){
+  document.getElementById('result').classList.remove('show');
+  const old=document.getElementById('inline-result');
+  if(old)old.remove();
+  G.level++;
+  if(G.level>=LEVELS.length||G.hp<=0){endGame();return}
+  renderLevel(G.level);
+}
+
+function endGame(){
+  document.getElementById('game-screen').classList.remove('show');
+  const el=document.getElementById('end-screen');
+  el.classList.add('show');
+  document.getElementById('end-title').textContent=
+    G.level>=LEVELS.length?'Database Legend — All Levels Complete!':'Reached Level '+(G.level+1);
+  document.getElementById('end-text').innerHTML=
+    `Final XP: <b>${G.xp}</b><br><br>`+
+    'You learned TiDB Cloud Starter:<br><br>'+
+    '• <b>RU</b> — pay per query, not per server<br>'+
+    '• <b>Indexes</b> — trade storage for cheaper RU<br>'+
+    '• <b>TiFlash</b> — columnar HTAP analytics<br>'+
+    '• <b>Full-text search</b> — no Elasticsearch<br>'+
+    '• <b>Vector search</b> — no Pinecone<br>'+
+    '• <b>TiDB X</b> — S3 storage backbone<br>'+
+    '• <b>TiDB Cloud Zero</b> — instant databases<br><br>'+
+    '<span style="color:var(--cyan)">Try it free → tidbcloud.com</span>';
+}
+
+function startGame(){
+  G={level:0,xp:0,hp:3,maxHp:3,ru:100,ruMax:500,storage:1,storageMax:25,cost:0,
+    unlocks:{sql:true,index:false,tiflash:false,vector:false,tidbx:false,zero:false},
+    name:'DBA_'+Math.floor(Math.random()*9999)};
+  document.getElementById('start-screen').classList.add('h');
+  document.getElementById('end-screen').classList.remove('show');
+  document.getElementById('game-screen').classList.add('show');
+  renderLevel(0);
+}
+
+document.addEventListener('keydown',e=>{
+  if(e.key==='Enter'&&(e.ctrlKey||e.metaKey)){
+    if(document.getElementById('sql-area').style.display!=='none')runSQL();
+  }
+});
+</script>
+</body>
+</html>
